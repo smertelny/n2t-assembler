@@ -1,4 +1,4 @@
-# Nand2Tetris assembler
+# Nand2Tetris (second part)
 
 Wanted to implement it in Rust because `Why not?` =)
 

@@ -3,5 +3,5 @@
 version = 3
 
 [[package]]
-name = "nand2tetris-assembler"
+name = "n2t-assembler"
 version = "0.1.0"

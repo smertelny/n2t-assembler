@@ -1,11 +1,6 @@
-use std::{
-    env,
-    fs::File,
-    io::{self, Read},
-    path::Path,
-};
+use std::{env, io, path::Path};
 
-use assembler::assembler::Assembler;
+use translator::translator::Translator;
 
 fn main() -> Result<(), io::Error> {
     let mut args = env::args();
@@ -20,15 +15,9 @@ fn main() -> Result<(), io::Error> {
 
     let file_path = args.nth(1).unwrap();
     let file_path: &Path = file_path.as_ref();
+    let file_name = file_path.file_stem().expect("No file provided");
 
-    let mut buf = String::with_capacity(1024 * 8);
-
-    File::open(file_path)?.read_to_string(&mut buf)?;
-
-    let file = buf;
-
-    let asm = Assembler::new(&file);
-    asm.emit(file_path)?;
+    let translator = Translator::new(file_path)?;
 
     Ok(())
 }

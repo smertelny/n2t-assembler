@@ -1,38 +1,28 @@
 use std::{
     fs::File,
-    io::{self, BufReader, BufWriter, Write},
+    io::{self, BufReader, Write},
     path::Path,
 };
 
 use crate::parser::Parser;
 
-pub struct Translator<'a> {
-    file_path: &'a Path,
+pub struct Translator {
     parser: Parser,
 }
 
-impl<'a> Translator<'a> {
-    pub fn new(filepath: &'a Path) -> Result<Self, io::Error> {
+impl Translator {
+    pub fn new(filepath: &Path) -> Result<Self, io::Error> {
+        let name = filepath.file_name().unwrap().to_string_lossy().to_string();
         let file = BufReader::new(File::open(&filepath)?);
 
-        let parser = Parser::new(file);
-        // while let Some(_) = parser.advance(){
-        //     dbg!(&parser);
-        // };
+        let parser = Parser::new(file, name);
 
-        Ok(Self {
-            file_path: filepath,
-            parser,
-        })
+        Ok(Self { parser })
     }
 
-    pub fn emit(&mut self) -> Result<(), io::Error> {
-        let path = self.file_path.parent().expect("Must be ok");
-        let name = self.file_path.file_stem().expect("Must be ok");
-        let mut file = BufWriter::new(File::create(path.join(name).join(".asm"))?);
-
+    pub fn emit<T: Write>(&mut self, mut writer: T) -> Result<(), io::Error> {
         while let Some(command) = self.parser.advance() {
-            file.write_all(command.to_string().as_bytes())?;
+            writer.write_all(command.to_string().as_bytes())?;
         }
 
         Ok(())

@@ -27,12 +27,12 @@ enum _Command {
     Arithmetic(ArtithmeticOperation),
     Push { segment: Segment, index: u16 },
     Pop { segment: Segment, index: u16 },
-    Label,
-    GOTO,
-    If,
-    Function,
+    Label(String),
+    GOTO(String),
+    If(String),
+    Function{ name: String, args: u16 },
     Return,
-    Call,
+    Call{ name: String, args: u16 },
 }
 
 impl _Command {
@@ -266,6 +266,26 @@ impl fmt::Display for Command {
                     }
                 }
             }
+            Label(label) => {
+                writeln!(f, "({label})")?;
+
+                Ok(())
+            }
+            GOTO(label) => {
+                writeln!(f, "@{label}")?;
+                writeln!(f, "0;JMP")?;
+
+                Ok(())
+            }
+            If(label) => {
+                writeln!(f, "@SP")?;
+                writeln!(f, "AM=M-1")?;
+                writeln!(f, "D=M")?;
+                writeln!(f, "@{label}")?;
+                writeln!(f, "D;JNE")?;
+
+                Ok(())
+            }
             _ => {
                 dbg!(self);
                 Err(fmt::Error)
@@ -305,8 +325,41 @@ impl TryFrom<&str> for _Command {
                     unreachable!()
                 }
             }
+            op if op.starts_with("label") => {
+                let (_, label) = op.split_once(" ").expect("Already checked");
+
+                Ok(_Command::Label(label.to_owned()))
+            }
+            op if op.starts_with("goto") => {
+                let (_, label) = op.split_once(" ").expect("already checked");
+
+                Ok(_Command::GOTO(label.to_owned()))
+            }
+            op if op.starts_with("if-goto") => {
+                let (_, label) = op.split_once(" ").expect("Already checked");
+
+                Ok(_Command::If(label.to_owned()))
+            }
+            op if op.starts_with("function") => {
+                let (_, rest) = op.split_once(" ").expect("Must be ok");
+                let (name, args) = rest.split_once(" ").expect("Must be ok");
+                let name = name.to_owned();
+                let args = args.parse().expect("Must be ok");
+
+                Ok(_Command::Function { name, args })
+            }
+            op if op.starts_with("call") => {
+                let mut iterator = op.split(" ").skip(1);
+                let name = iterator.next().expect("Must be ok").to_owned();
+                let args = iterator.next().expect("Must be ok").parse().expect("Must be ok");
+
+                Ok(_Command::Call { name, args })
+            }
+            op if op.starts_with("return") => {
+                Ok(_Command::Return)
+            }
             _ => {
-                unimplemented!()
+                unimplemented!("{value} is not implemented in parser")
             }
         }
     }
@@ -409,7 +462,12 @@ impl Parser {
             line = self.lines.next()?.expect("Must be ok");
         }
 
-        let line = line.trim();
+        let mut line = line.trim();
+
+        if line.contains("//") {
+            let (needed, _) = line.split_once("//").expect("checked in contains");
+            line = needed.trim_end();
+        }
 
         self.command.cmd = match _Command::try_from(line) {
             Ok(value) => value,

@@ -23,9 +23,19 @@ fn main() -> Result<(), io::Error> {
 
     let mut translator = Translator::new(file_path)?;
 
-    let parent_path = file_path.parent().expect("Must be ok");
-    let name = file_path.file_stem().expect("Must be ok");
-    let mut asm_file = parent_path.join(name);
+    let mut asm_file;
+    if file_path.is_file() {
+        let parent_path = file_path.parent().expect("Must be ok");
+        let name = file_path.file_stem().expect("Must be ok");
+        asm_file = parent_path.join(name);
+    } else if file_path.is_dir() {
+        let folder_name = file_path.file_name().expect("Must be ok");
+        asm_file = file_path.join(folder_name);
+    } else {
+        // TODO: Need to try simlinks to check if this will be triggered
+        panic!("Provided string neigher path nor file");
+    }
+
     asm_file.set_extension("asm");
     let file = BufWriter::new(File::create(asm_file)?);
 

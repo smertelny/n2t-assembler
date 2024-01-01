@@ -62,7 +62,12 @@ impl<'a> Assembler<'a> {
                     }
 
                     if let Some(comp) = comp {
-                        result |= instruction_table.comp.get(comp).expect("Unknown comp");
+                        result |= match instruction_table.comp.get(comp) {
+                            Some(value) => value,
+                            None => {
+                                panic!("Unknown computation command: {:?}", comp)
+                            }
+                        }
                     } else {
                         result |= instruction_table
                             .comp

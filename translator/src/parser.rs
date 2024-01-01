@@ -1,14 +1,14 @@
 use core::fmt;
 use std::{
     cell::Cell,
-    fs::File,
-    io::{BufRead, BufReader, Lines},
+    io::{BufRead, Lines},
 };
 
 #[derive(Debug)]
 pub struct Command {
     cmd: _Command,
     label_value: std::cell::Cell<u16>, // Need this because we can't change fmt::Display API
+    call_label: std::cell::Cell<u16>,
     name: String,
 }
 
@@ -17,6 +17,7 @@ impl Command {
         Self {
             cmd: _Command::Return,
             label_value: std::cell::Cell::new(0),
+            call_label: std::cell::Cell::new(0),
             name,
         }
     }
@@ -30,9 +31,9 @@ enum _Command {
     Label(String),
     GOTO(String),
     If(String),
-    Function{ name: String, args: u16 },
+    Function { name: String, args: u16 },
     Return,
-    Call{ name: String, args: u16 },
+    Call { name: String, args: u16 },
 }
 
 impl _Command {
@@ -59,6 +60,15 @@ impl _Command {
         writeln!(f, "D=A+1")?; // increment stack pointer
         writeln!(f, "@SP")?;
         writeln!(f, "M=D")?; // write stack top to stack pointer registry
+
+        Ok(())
+    }
+
+    #[inline]
+    fn pop_into_d_reg(f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "@SP")?;
+        writeln!(f, "AM=M-1")?;
+        writeln!(f, "D=M")?;
 
         Ok(())
     }
@@ -105,6 +115,17 @@ impl _Command {
         writeln!(f, "D=A+1")?; // Inc stack pointer and store stack top in D reg
         writeln!(f, "@SP")?;
         writeln!(f, "M=D")?; // Write stack top to SP
+
+        Ok(())
+    }
+
+    #[inline]
+    fn register_to_stack(f: &mut fmt::Formatter, name: &str) -> fmt::Result {
+        writeln!(f, "@{name}")?;
+        writeln!(f, "D=M")?;
+        writeln!(f, "@SP")?;
+        writeln!(f, "AM=M+1")?;
+        writeln!(f, "M=D")?;
 
         Ok(())
     }
@@ -286,9 +307,103 @@ impl fmt::Display for Command {
 
                 Ok(())
             }
-            _ => {
-                dbg!(self);
-                Err(fmt::Error)
+            Function { name, args } => {
+                writeln!(f, "({name})")?;
+                (0..*args).into_iter().try_for_each(|_| {
+                    writeln!(f, "D=0")?;
+                    _Command::push_from_d_reg(f)?;
+
+                    Ok::<(), fmt::Error>(())
+                })?;
+
+                Ok(())
+            }
+            Call { name, args } => {
+                // Pushing return address to stack
+                let label = self.call_label.get();
+
+                writeln!(f, "@{name}.ret.{label}")?;
+                writeln!(f, "D=A")?;
+                writeln!(f, "@SP")?;
+                writeln!(f, "AM=M+1")?;
+                writeln!(f, "M=D")?;
+
+                _Command::register_to_stack(f, "LCL")?;
+                _Command::register_to_stack(f, "ARG")?;
+                _Command::register_to_stack(f, "THIS")?;
+                _Command::register_to_stack(f, "THAT")?;
+
+                writeln!(f, "@5")?;
+                writeln!(f, "D=A")?;
+                writeln!(f, "@{}", *args)?;
+                writeln!(f, "D=D+A")?;
+                writeln!(f, "@SP")?;
+                writeln!(f, "D=M-D")?;
+                writeln!(f, "@ARG")?;
+                writeln!(f, "M=D")?;
+
+                writeln!(f, "@SP")?;
+                writeln!(f, "D=M")?;
+                writeln!(f, "@LCL")?;
+                writeln!(f, "M=D")?;
+
+                writeln!(f, "@{name}")?;
+                writeln!(f, "0;JMP")?;
+
+                writeln!(f, "({name}.ret.{label})")?;
+
+                self.call_label.set(label + 1);
+
+                Ok(())
+            }
+            Return => {
+                writeln!(f, "@LCL")?;
+                writeln!(f, "D=M")?;
+                writeln!(f, "@R15")?; // Frame reg
+                writeln!(f, "M=D")?;
+
+                writeln!(f, "@5")?;
+                writeln!(f, "D=D-A")?;
+                writeln!(f, "@R14")?; // Return address
+                writeln!(f, "M=D")?;
+
+                _Command::pop_into_d_reg(f)?;
+                writeln!(f, "@ARG")?;
+                writeln!(f, "A=M")?;
+                writeln!(f, "M=D")?;
+                writeln!(f, "@ARG")?;
+                writeln!(f, "D=M+1")?;
+                writeln!(f, "@SP")?;
+                writeln!(f, "M=D")?;
+
+                writeln!(f, "@R15")?;
+                writeln!(f, "A=M-1")?;
+                writeln!(f, "D=M")?;
+                // writeln!(f, "")?;
+                writeln!(f, "@THAT")?;
+                writeln!(f, "M=D")?;
+
+                ["@NONE_HERE", "@THAT", "@THIS", "@ARG", "@LCL"]
+                    .iter()
+                    .enumerate()
+                    .skip(2)
+                    .try_for_each(|(index, addr)| {
+                        writeln!(f, "@R15")?;
+                        writeln!(f, "D=M")?;
+                        writeln!(f, "@{index}")?;
+                        writeln!(f, "A=D-A")?;
+                        writeln!(f, "D=M")?;
+                        writeln!(f, "{addr}")?;
+                        writeln!(f, "M=D")?;
+
+                        Ok(())
+                    })?;
+
+                writeln!(f, "@R14")?;
+                writeln!(f, "A=M")?;
+                writeln!(f, "0;JMP")?;
+
+                Ok(())
             }
         }
     }
@@ -351,13 +466,15 @@ impl TryFrom<&str> for _Command {
             op if op.starts_with("call") => {
                 let mut iterator = op.split(" ").skip(1);
                 let name = iterator.next().expect("Must be ok").to_owned();
-                let args = iterator.next().expect("Must be ok").parse().expect("Must be ok");
+                let args = iterator
+                    .next()
+                    .expect("Must be ok")
+                    .parse()
+                    .expect("Must be ok");
 
                 Ok(_Command::Call { name, args })
             }
-            op if op.starts_with("return") => {
-                Ok(_Command::Return)
-            }
+            op if op.starts_with("return") => Ok(_Command::Return),
             _ => {
                 unimplemented!("{value} is not implemented in parser")
             }
@@ -441,18 +558,26 @@ impl fmt::Display for Segment {
 }
 
 #[derive(Debug)]
-pub(crate) struct Parser {
-    lines: Lines<BufReader<File>>,
+pub(crate) struct Parser<T: BufRead> {
+    lines: Lines<T>,
     command: Command,
 }
 
-impl Parser {
-    pub(crate) fn new(file: BufReader<File>, name: String) -> Self {
+impl<T> Parser<T>
+where
+    T: BufRead,
+{
+    pub(crate) fn new(file: T, name: String) -> Self {
         Self {
             // command: Command::Arithmetic(ArtithmeticOperation::Add),
             command: Command::new(name),
             lines: file.lines(),
         }
+    }
+
+    pub(crate) fn next_file(&mut self, file: T, name: &str) {
+        self.lines = file.lines();
+        self.command.name = name.to_owned();
     }
 
     pub(crate) fn advance(&mut self) -> Option<&Command> {

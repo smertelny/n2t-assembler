@@ -1,6 +1,5 @@
 /target
 
-**/._*
 .DS_Store
 .vscode/
-translator/07
+tasks_files/

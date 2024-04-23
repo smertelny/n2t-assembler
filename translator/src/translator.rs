@@ -54,20 +54,24 @@ impl Translator {
             )?),
             "".to_owned(),
         );
+        // Initializing stack. Must be included once
+        writeln!(writer, "@256")?;
+        writeln!(writer, "D=A")?;
+        writeln!(writer, "@SP")?;
+        writeln!(writer, "M=D")?;
+
+        // Here we need to CALL Sys.init, not just jump to it
+        // writeln!(writer, "@Sys.init")?;
+        // writeln!(writer, "0;JMP")?;
+        writer.write_all(crate::parser::Command::init().to_string().as_bytes())?;
+
         self.files.iter().try_for_each(|filepath| {
             let file = BufReader::new(File::open(&filepath)?);
             let name = filepath.file_name().unwrap().to_string_lossy().to_string();
             parser.next_file(file, &name);
 
-            // Init
-            writeln!(writer, "@256")?;
-            writeln!(writer, "D=A")?;
-            writeln!(writer, "@SP")?;
-            writeln!(writer, "M=D")?;
-            writeln!(writer, "@Sys.init")?;
-            writeln!(writer, "0;JMP")?;
-
             writeln!(writer, "// File: {name}")?;
+
             while let Some(command) = parser.advance() {
                 writer.write_all(command.to_string().as_bytes())?;
             }

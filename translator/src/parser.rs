@@ -21,6 +21,15 @@ impl Command {
             name,
         }
     }
+
+    pub fn init() -> Self {
+        Self {
+            cmd: _Command::Call { name: "Sys.init".to_owned(), args: 0 },
+            label_value: std::cell::Cell::new(0),
+            call_label: std::cell::Cell::new(0),
+            name: "Init".to_owned(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -123,9 +132,10 @@ impl _Command {
     fn register_to_stack(f: &mut fmt::Formatter, name: &str) -> fmt::Result {
         writeln!(f, "@{name}")?;
         writeln!(f, "D=M")?;
-        writeln!(f, "@SP")?;
-        writeln!(f, "AM=M+1")?;
-        writeln!(f, "M=D")?;
+        _Command::push_from_d_reg(f)?;
+        // writeln!(f, "@SP")?;
+        // writeln!(f, "AM=M+1")?;
+        // writeln!(f, "M=D")?;
 
         Ok(())
     }
@@ -324,15 +334,14 @@ impl fmt::Display for Command {
 
                 writeln!(f, "@{name}.ret.{label}")?;
                 writeln!(f, "D=A")?;
-                writeln!(f, "@SP")?;
-                writeln!(f, "AM=M+1")?;
-                writeln!(f, "M=D")?;
+                _Command::push_from_d_reg(f)?;
 
                 _Command::register_to_stack(f, "LCL")?;
                 _Command::register_to_stack(f, "ARG")?;
                 _Command::register_to_stack(f, "THIS")?;
                 _Command::register_to_stack(f, "THAT")?;
 
+                // ARG = SP - n - 5 (n - number of arguments to function)
                 writeln!(f, "@5")?;
                 writeln!(f, "D=A")?;
                 writeln!(f, "@{}", *args)?;
@@ -359,11 +368,13 @@ impl fmt::Display for Command {
             Return => {
                 writeln!(f, "@LCL")?;
                 writeln!(f, "D=M")?;
-                writeln!(f, "@R15")?; // Frame reg
+                writeln!(f, "@R13")?; // Frame reg
                 writeln!(f, "M=D")?;
 
                 writeln!(f, "@5")?;
                 writeln!(f, "D=D-A")?;
+                writeln!(f, "A=D")?;
+                writeln!(f, "D=M")?;
                 writeln!(f, "@R14")?; // Return address
                 writeln!(f, "M=D")?;
 
@@ -371,33 +382,45 @@ impl fmt::Display for Command {
                 writeln!(f, "@ARG")?;
                 writeln!(f, "A=M")?;
                 writeln!(f, "M=D")?;
+
                 writeln!(f, "@ARG")?;
                 writeln!(f, "D=M+1")?;
                 writeln!(f, "@SP")?;
                 writeln!(f, "M=D")?;
 
-                writeln!(f, "@R15")?;
-                writeln!(f, "A=M-1")?;
-                writeln!(f, "D=M")?;
-                // writeln!(f, "")?;
-                writeln!(f, "@THAT")?;
-                writeln!(f, "M=D")?;
+                // writeln!(f, "@R13")?;
+                // writeln!(f, "A=M-1")?;
+                // writeln!(f, "D=M")?;
+                // // writeln!(f, "")?;
+                // writeln!(f, "@THAT")?;
+                // writeln!(f, "M=D")?;
 
                 ["@NONE_HERE", "@THAT", "@THIS", "@ARG", "@LCL"]
                     .iter()
                     .enumerate()
-                    .skip(2)
+                    .skip(1)
                     .try_for_each(|(index, addr)| {
-                        writeln!(f, "@R15")?;
+                        writeln!(f, "@R13")?;
                         writeln!(f, "D=M")?;
                         writeln!(f, "@{index}")?;
-                        writeln!(f, "A=D-A")?;
+                        // writeln!(f, "A=D-A")?;
+                        // writeln!(f, "D=M")?;
+                        writeln!(f, "D=D-A")?;
+                        writeln!(f, "A=D")?;
                         writeln!(f, "D=M")?;
                         writeln!(f, "{addr}")?;
                         writeln!(f, "M=D")?;
 
                         Ok(())
                     })?;
+
+                // Place stack pointer in position
+                // writeln!(f, "@SP")?;
+                // writeln!(f, "D=M")?;
+                // writeln!(f, "@5")?;
+                // writeln!(f, "D=D-A")?;
+                // writeln!(f, "@SP")?;
+                // writeln!(f, "M=D")?;
 
                 writeln!(f, "@R14")?;
                 writeln!(f, "A=M")?;

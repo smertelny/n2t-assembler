@@ -24,7 +24,10 @@ impl Command {
 
     pub fn init() -> Self {
         Self {
-            cmd: _Command::Call { name: "Sys.init".to_owned(), args: 0 },
+            cmd: _Command::Call {
+                name: "Sys.init".to_owned(),
+                args: 0,
+            },
             label_value: std::cell::Cell::new(0),
             call_label: std::cell::Cell::new(0),
             name: "Init".to_owned(),
@@ -38,7 +41,7 @@ enum _Command {
     Push { segment: Segment, index: u16 },
     Pop { segment: Segment, index: u16 },
     Label(String),
-    GOTO(String),
+    Goto(String),
     If(String),
     Function { name: String, args: u16 },
     Return,
@@ -302,7 +305,7 @@ impl fmt::Display for Command {
 
                 Ok(())
             }
-            GOTO(label) => {
+            Goto(label) => {
                 writeln!(f, "@{label}")?;
                 writeln!(f, "0;JMP")?;
 
@@ -471,7 +474,7 @@ impl TryFrom<&str> for _Command {
             op if op.starts_with("goto") => {
                 let (_, label) = op.split_once(" ").expect("already checked");
 
-                Ok(_Command::GOTO(label.to_owned()))
+                Ok(_Command::Goto(label.to_owned()))
             }
             op if op.starts_with("if-goto") => {
                 let (_, label) = op.split_once(" ").expect("Already checked");

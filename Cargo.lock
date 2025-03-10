@@ -7,5 +7,9 @@ name = "assembler"
 version = "0.1.0"
 
 [[package]]
+name = "compiler"
+version = "0.1.0"
+
+[[package]]
 name = "translator"
 version = "0.1.0"

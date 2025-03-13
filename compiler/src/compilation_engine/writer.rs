@@ -5,8 +5,8 @@ use crate::tokenizer::{Keyword, Token};
 use super::CompilationEngine;
 
 pub trait CompilationWriter {
+    fn write_term(&mut self) -> Result<()>;
     fn write_expression_list(&mut self) -> Result<()>;
-    // fn write_subroutine_call(&mut self) -> Result<()>;
     fn write_expression(&mut self) -> Result<()>;
     fn write_closing_tag(&mut self, data: &[u8]) -> Result<()>;
     fn write_open_tag(&mut self, data: &[u8]) -> Result<()>;
@@ -31,7 +31,6 @@ pub struct XmlWriter<'a, T: Read, W: Write> {
     writer: &'a mut W,
     padding: u8,
     padding_level: u8,
-    // current_token: Token,
 }
 
 impl<'a, T: Read, W: Write> XmlWriter<'a, T, W> {
@@ -44,7 +43,6 @@ impl<'a, T: Read, W: Write> XmlWriter<'a, T, W> {
             writer,
             padding: 0,
             padding_level: 2,
-            // current_token: Token::Keyword(Keyword::Class),
         }
     }
 
@@ -55,10 +53,6 @@ impl<'a, T: Read, W: Write> XmlWriter<'a, T, W> {
             .advance()
             .expect("no input found")
             .expect("failed to get first token");
-
-        println!("{:?}", token);
-
-        // self.current_token = token;
 
         token
     }
@@ -161,7 +155,6 @@ impl<'a, T: Read, W: Write> CompilationWriter for XmlWriter<'a, T, W> {
             if has_subroutine_declarations {
                 self.write_subroutine_declarations()?;
                 token = self.peek_token();
-                println!("subroutine: {:?}", token);
             } else {
                 break;
             }
@@ -174,7 +167,6 @@ impl<'a, T: Read, W: Write> CompilationWriter for XmlWriter<'a, T, W> {
         self.write_closing_tag(b"</class>")?;
 
         Ok(())
-        // self.compilation_engine
     }
 
     fn write_terminal(&mut self, token: &Token) -> Result<()> {
@@ -271,10 +263,6 @@ impl<'a, T: Read, W: Write> CompilationWriter for XmlWriter<'a, T, W> {
             let token = self.next_token();
             self.write_terminal(&token)?;
         }
-        // self.write_terminal(&self.next_token())?; // function
-        // self.write_terminal(&self.next_token())?; // type
-        // self.write_terminal(&self.next_token())?; // name
-        // self.write_terminal(&self.next_token())?; // open bracket
 
         self.write_parameter_list()?;
 
@@ -381,7 +369,6 @@ impl<'a, T: Read, W: Write> CompilationWriter for XmlWriter<'a, T, W> {
         }
         self.write_closing_tag(b"</statements>")?;
 
-        // self.write_terminal(&token)?;
         Ok(())
     }
 
@@ -402,9 +389,14 @@ impl<'a, T: Read, W: Write> CompilationWriter for XmlWriter<'a, T, W> {
         if matches!(&token, Token::Symbol(&'[')) {
             self.write_terminal(&token)?;
             self.write_expression()?;
+
+            token = self.next_token();
+            self.expect(&token, Token::Symbol(&']'));
+            self.write_terminal(&token)?;
+
+            token = self.next_token();
         }
 
-        // token = self.next_token();
         self.expect(&token, Token::Symbol(&'='));
         self.write_terminal(&token)?;
 
@@ -419,7 +411,6 @@ impl<'a, T: Read, W: Write> CompilationWriter for XmlWriter<'a, T, W> {
     }
 
     fn write_if_statement(&mut self) -> Result<()> {
-        // FIXME: Need to parse expressions here
         self.write_open_tag(b"<ifStatement>")?;
 
         let token = self.next_token();
@@ -478,9 +469,6 @@ impl<'a, T: Read, W: Write> CompilationWriter for XmlWriter<'a, T, W> {
         self.expect(&token, Token::Symbol(&'('));
         self.write_terminal(&token)?;
 
-        // FIXME: parse expression
-        // token = self.next_token();
-        // self.write_terminal(&token)?;
         self.write_expression()?;
 
         token = self.next_token();
@@ -543,38 +531,119 @@ impl<'a, T: Read, W: Write> CompilationWriter for XmlWriter<'a, T, W> {
 
     fn write_expression(&mut self) -> Result<()> {
         let token = self.peek_token();
-        println!("write-expr: {:?}", token);
 
-        let is_expression = match token {
-            Token::IntConst(_) | Token::StringConst(_) => true,
-            Token::Keyword(Keyword::True)
-            | Token::Keyword(Keyword::False)
-            | Token::Keyword(Keyword::Null)
-            | Token::Keyword(Keyword::This) => true,
-            Token::Identifier(_) => true,
-            Token::Symbol(&';') | Token::Symbol(&',') | Token::Symbol(&')') => false,
-            _ => todo!(),
-        };
-        if !is_expression {
+        fn is_terminal(token: &Token) -> bool {
+            match token {
+                Token::IntConst(_) | Token::StringConst(_) => true,
+                Token::Keyword(Keyword::True)
+                | Token::Keyword(Keyword::False)
+                | Token::Keyword(Keyword::Null)
+                | Token::Keyword(Keyword::This) => true,
+                Token::Identifier(_) => true,
+                Token::Symbol(&'(') => true,
+                Token::Symbol(&'~') | Token::Symbol(&'-') => true,
+                Token::Symbol(&';') | Token::Symbol(&',') | Token::Symbol(&')') => false,
+                _ => false,
+            }
+        }
+
+        let is_term = is_terminal(&token);
+        if !is_term {
             return Ok(());
         }
 
         self.write_open_tag(b"<expression>")?;
 
+        self.write_term()?;
+
+        let token = self.peek_token();
+        match token {
+            Token::Symbol(&'+')
+            | Token::Symbol(&'-')
+            | Token::Symbol(&'*')
+            | Token::Symbol(&'/')
+            | Token::Symbol(&'&')
+            | Token::Symbol(&'|')
+            | Token::Symbol(&'<')
+            | Token::Symbol(&'>')
+            | Token::Symbol(&'=') => {
+                let token = self.next_token();
+                self.write_terminal(&token)?;
+
+                self.write_term()?;
+            }
+            _ => {}
+        }
+
+        self.write_closing_tag(b"</expression>")?;
+
+        Ok(())
+    }
+
+    fn write_term(&mut self) -> Result<()> {
         self.write_open_tag(b"<term>")?;
 
         let token = self.next_token();
         self.write_terminal(&token)?;
 
+        match token {
+            Token::Symbol(&'~') | Token::Symbol(&'-') => {
+                self.write_term()?;
+            }
+            Token::Identifier(_) => {
+                let mut next = self.peek_token();
+
+                if next == Token::Symbol(&'[') {
+                    let token = self.next_token();
+                    self.write_terminal(&token)?;
+
+                    self.write_expression()?;
+
+                    let token = self.next_token();
+                    self.expect(&token, Token::Symbol(&']'));
+                    self.write_terminal(&token)?;
+                }
+
+                // subroutine call
+                if next == Token::Symbol(&'.') {
+                    let token = self.next_token();
+                    self.write_terminal(&token)?;
+
+                    let token = self.next_token();
+                    if !matches!(token, Token::Identifier(_)) {
+                        panic!("Expected identifier, found {:?}", token);
+                    }
+                    self.write_terminal(&token)?;
+
+                    next = self.peek_token();
+                }
+
+                // Need to be last
+                if next == Token::Symbol(&'(') {
+                    let token = self.next_token();
+                    self.write_terminal(&token)?;
+
+                    self.write_expression_list()?;
+
+                    let token = self.next_token();
+                    self.expect(&token, Token::Symbol(&')'));
+                    self.write_terminal(&token)?;
+                }
+            }
+            Token::Symbol(&'(') => {
+                self.write_expression()?;
+
+                let token = self.next_token();
+                self.expect(&token, Token::Symbol(&')'));
+                self.write_terminal(&token)?;
+            }
+            _ => {}
+        }
+
         self.write_closing_tag(b"</term>")?;
 
-        self.write_closing_tag(b"</expression>")?;
         Ok(())
     }
-
-    // fn write_subroutine_call(&mut self) -> Result<()> {
-    //     Ok(())
-    // }
 
     fn write_expression_list(&mut self) -> Result<()> {
         self.write_open_tag(b"<expressionList>")?;
@@ -592,9 +661,6 @@ impl<'a, T: Read, W: Write> CompilationWriter for XmlWriter<'a, T, W> {
                 token = self.next_token();
                 self.write_terminal(&token)?;
             }
-
-            // self.next_token();
-            // self.write_terminal(&token)?;
         }
 
         self.write_closing_tag(b"</expressionList>")?;
@@ -602,8 +668,6 @@ impl<'a, T: Read, W: Write> CompilationWriter for XmlWriter<'a, T, W> {
         Ok(())
     }
 }
-
-// impl<T: std::io::Read> XmlWriter for CompilationEngine<T> {}
 
 #[cfg(test)]
 mod tests {

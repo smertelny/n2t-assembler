@@ -58,8 +58,6 @@ pub enum Keyword {
 pub struct Tokenizer<T> {
     file: BufReader<T>,
     buf: String,
-    // tokens: Vec<Token>,
-    // token: Option<Token>,
 }
 
 impl<T: std::io::Read> Tokenizer<T> {
@@ -67,7 +65,6 @@ impl<T: std::io::Read> Tokenizer<T> {
         Ok(Tokenizer {
             file: BufReader::new(file),
             buf: String::with_capacity(2048),
-            // token: None,
         })
     }
 
@@ -138,7 +135,6 @@ impl<T: std::io::Read> Tokenizer<T> {
     pub fn advance(&mut self) -> Option<Result<Token>> {
         const DELETE: bool = true;
         self.get_next_token(DELETE)
-        // let
     }
 
     pub(crate) fn peek_token(&mut self) -> Option<Result<Token>> {

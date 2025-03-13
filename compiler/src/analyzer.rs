@@ -11,7 +11,6 @@ impl<'a> Analyzer {
         files.iter().for_each(|path| {
             println!("\n FILE: {:?}", &path.as_ref());
             let file = File::open(path).expect("failed to open file");
-            // let mut t = Tokenizer::new(file).expect("failed to create tokenizer");
             let mut compiler = CompilationEngine::new(file);
 
             let parent_path = path
@@ -30,20 +29,6 @@ impl<'a> Analyzer {
             let buf = BufWriter::new(file);
 
             compiler.compile(buf).expect("failed to compile");
-
-            // buf.write_all(b"<tokens>\n")
-            //     .expect("failed to write into buffer");
-            // while let Some(token) = t.advance() {
-            //     buf.write_all(b"    ").expect("failed to write into buffer");
-            //     let token = token.expect("failed to get token");
-            //     token
-            //         .write_xml(&mut buf)
-            //         .expect("failed to write into file");
-            //     buf.write_all(b"\n").expect("failed to write into buffer");
-            //     // println!("{:?}", token);
-            // }
-            // buf.write_all(b"</tokens>")
-            //     .expect("failed to write into buffer");
         });
         Ok(())
     }

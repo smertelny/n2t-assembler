@@ -1,4 +1,4 @@
-use std::io::{Read, Result, Write};
+use std::io::{Result, Write};
 
 use super::Token;
 

@@ -9,6 +9,7 @@ static SYMBOL_LIST: [char; 19] = [
 
 /// Using this instead of `str.trim()` because
 /// it trims string without realocation in place
+#[inline]
 fn trim(s: &mut String) {
     let trimmed = s.trim_end();
     s.truncate(trimmed.len());
@@ -19,12 +20,7 @@ fn trim(s: &mut String) {
 
 struct CharsNumber(usize);
 
-// #[derive(Debug)]
-// pub enum Symbol {
-//     LeftParan
-// }
-
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Token {
     Keyword(Keyword),
     Symbol(&'static char),
@@ -33,7 +29,7 @@ pub enum Token {
     StringConst(String),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Keyword {
     Class,
     Method,
@@ -75,7 +71,7 @@ impl<T: std::io::Read> Tokenizer<T> {
         })
     }
 
-    pub fn advance(&mut self) -> Option<Result<Token>> {
+    fn get_next_token(&mut self, delete: bool) -> Option<Result<Token>> {
         // `while let` do not make possibility to get error from read_line
         loop {
             if self.buf.len() == 0 {
@@ -131,11 +127,23 @@ impl<T: std::io::Read> Tokenizer<T> {
             }
 
             let (n, token) = Self::parse_token(line);
-            self.buf.replace_range(..n.0, "");
+            if delete {
+                self.buf.replace_range(..n.0, "");
+            }
 
             return Some(Ok(token));
         }
+    }
+
+    pub fn advance(&mut self) -> Option<Result<Token>> {
+        const DELETE: bool = true;
+        self.get_next_token(DELETE)
         // let
+    }
+
+    pub(crate) fn peek_token(&mut self) -> Option<Result<Token>> {
+        const DELETE: bool = false;
+        self.get_next_token(DELETE)
     }
 
     fn parse_token(line: &str) -> (CharsNumber, Token) {
@@ -314,5 +322,20 @@ mod tests {
             _ => false,
         };
         assert!(result);
+    }
+
+    #[test]
+    fn peek_token_does_not_consume_input() {
+        let buf = "class Main_class".as_bytes();
+        let mut t = Tokenizer::new(buf).unwrap();
+
+        assert!(matches!(
+            t.peek_token(),
+            Some(Ok(Token::Keyword(Keyword::Class)))
+        ));
+        assert!(matches!(
+            t.peek_token(),
+            Some(Ok(Token::Keyword(Keyword::Class)))
+        ));
     }
 }
